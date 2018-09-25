@@ -51,7 +51,7 @@ function BinaryFileUploader(o) {
 
 	this._mergeObjects = function(starting, override) {
 		var merged = starting;
-		for (key in override) merged[key] = override[key];
+		for (var key in override) merged[key] = override[key];
 
 		return merged;
 	}
