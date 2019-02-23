@@ -24,9 +24,9 @@ $(function(){
  *   contents/[path]?ref=branch/tag/commit      Get the contents of a file
  */
 
- /* GitHub: MarlinConfigurator
- // Warning! Limited to 60 requests per hour!
-var config = {
+//* GitHub: MarlinConfigurator
+// Warning! Limited to 60 requests per hour!
+var config_github_th = {
   type:  'github',
   host:  'https://api.github.com',
   owner: 'thinkyhead',
@@ -36,9 +36,9 @@ var config = {
 };
 /**/
 
-/* Github: Marlin
+//* Github: Marlin
 // Warning! Limited to 60 requests per hour!
-var config = {
+var config_github_mf = {
   type:  'github',
   host:  'https://api.github.com',
   owner: 'MarlinFirmware',
@@ -49,19 +49,21 @@ var config = {
 /**/
 
 //* Remote (Servers may need .htaccess here)
-var config = {
+var config_remote = {
   type:  'remote',
   host:  'http://www.thinkyhead.com',
-  path:  '_marlin/config'
+  path:  '_marlin/config/2.0.x'
 };
 /**/
 
-/* Local
-var config = {
+//* Local
+var config_local = {
   type:  'local',
-  path:  '../config'
+  path:  'config/2.0.x'
 };
 /**/
+
+var config = window.location.protocol == 'file:' ? config_remote : config_local;
 
 function github_command(conf, command, path) {
   var req = conf.host+'/repos/'+conf.owner+'/'+conf.repo+'/'+command;
