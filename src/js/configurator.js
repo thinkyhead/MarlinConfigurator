@@ -48,7 +48,7 @@ var config = {
 };
 /**/
 
-/* Remote (Servers may need .htaccess here)
+//* Remote (Servers may need .htaccess here)
 var config = {
   type:  'remote',
   host:  'http://www.thinkyhead.com',
@@ -56,10 +56,10 @@ var config = {
 };
 /**/
 
-//* Local
+/* Local
 var config = {
   type:  'local',
-  path:  'config'
+  path:  '../config'
 };
 /**/
 
@@ -76,10 +76,10 @@ function config_path(item) {
       if (config.ref !== undefined) ref = '?ref=' + config.ref;
       break;
     case 'remote':
-      path = config.host + '/' + config.path + '/';
+      path = config.host + '/' + config.path;
       break;
     case 'local':
-      path = config.path + '/';
+      path = config.path;
       break;
   }
   return path + '/' + item + ref;
@@ -120,6 +120,8 @@ Date.prototype.fileStamp = function(filename) {
   return fs;
 }
 
+function isArray(v) { return Object.prototype.toString.call(v) == "[object Array]" }
+
 /**
  * selectField.addOptions takes an array or keyed object
  */
@@ -127,7 +129,7 @@ $.fn.extend({
   addOptions: function(arrObj) {
     return this.each(function() {
       var sel = $(this);
-      var isArr = Object.prototype.toString.call(arrObj) == "[object Array]";
+      var isArr = isArray(arrObj);
       $.each(arrObj, function(k, v) {
         sel.append( $('<option>',{value:isArr?v:k}).text(v) );
       });
@@ -181,7 +183,8 @@ window.configuratorApp = (function(){
       LOG_ERROR = 4,
       LOG_FUNC = 8,
       LOG_PARSE = 16,
-      LOG_MORE = 32;
+      LOG_MORE = 32,
+      LOG_OPTIONS = 64;
 
   // Return this anonymous object as configuratorApp
   return {
@@ -267,8 +270,7 @@ window.configuratorApp = (function(){
             }
           },
           complete: function() {
-            ajax_count++;
-            if (ajax_count >= config_file_list.length) {
+            if (++ajax_count >= config_file_list.length) {
               // If not all files loaded set an error
               if (success_count < ajax_count)
                 self.setMessage('Unable to load configurations. Try the upload field.', 'error');
@@ -327,11 +329,19 @@ window.configuratorApp = (function(){
           $(this).attr({ download:fn, href:'download:'+fn, title:'download:'+fn });
         })
         .click(function(){
-          var $button = $(this);
-          var zip = new JSZip();
-          for (var e in [0,1]) zip.file(config_file_list[e+1], config_list[e].text());
+          var zip = new JSZip(), $button = $(this);
+          $.each(config_file_list.slice(1), function(i,v){ zip.file(v, config_list[i].text()); });
+
+          // JSZip 3.x
+          // var result = zip.generateAsync({type:'blob'}).then(
+          //   function(blob){ saveAs(blob, $button.attr('download')); },
+          //   function(err){ $button.addClass('err'); }
+          // );
+
+          // JSZip 2.x
           var zipped = zip.generate({type:'blob'});
           saveAs(zipped, $button.attr('download'));
+
           return false;
         })
         .css({visibility:'visible'});
@@ -725,8 +735,8 @@ window.configuratorApp = (function(){
     handleFileLoad: function(txt, $uploader) {
       this.log(">> handleFileLoad", LOG_FUNC);
       txt += '';
-      var filename = $uploader.val().replace(/.*[\/\\](.*)$/, '$1');
-      if ($.inArray(filename, config_file_list))
+      var filename = $uploader.val().replace(/(.*[\/\\])+/, '');
+      if ($.inArray(filename, config_file_list) !== -1)
         this.fileLoaded(filename, txt);
       else
         this.setMessage("Can't parse '"+filename+"'!");
@@ -1335,8 +1345,8 @@ window.configuratorApp = (function(){
 
         // Get all the comments immediately before the item, also include #define lines preceding it
         var s;
-        // find = new RegExp('(([ \\t]*(//|#)[^\n]+\n){1,4})' + info.line.regEsc(), 'g');
-        find = new RegExp('(([ \\t]*//+[^\n]+\n)+([ \\t]*(//)?#define[^\n]+\n)*)' + info.line.regEsc(), 'g');
+        // find = new RegExp('(([ \\t]*(//|#)[^\n]+\n+){1,4})' + info.line.regEsc(), 'g');
+        find = new RegExp('(([ \\t]*//+[^\n]+\n+)+([ \\t]*(//)?#define[^\n]+\n+)*)' + info.line.regEsc(), 'g');
         if (r = find.exec(txt)) {
           var temp = [], tips = [];
 
@@ -1362,13 +1372,13 @@ window.configuratorApp = (function(){
             // if (tip.match(/^#define[ \\t]/) != null) tooltip = eoltip;
             // JSON data? Save as select options
             var parts = tip.match(/:([\[{].+)/);
-            if (!info.options && parts != null) {
+            if (parts != null && info.options === undefined) {
               // TODO
               // :[1-6] = value limits
-              //console.log('o=' + parts[1], LOG_MORE);
-              var o; eval('o=' + parts[1]);
+              self.log(name + '[]=' + parts[1], LOG_OPTIONS);
+              var o = eval('o=' + parts[1]), isArr = isArray(o);
               info.options = o;
-              if (Object.prototype.toString.call(o) == "[object Array]" && o.length == 2 && !eval(''+o[0]))
+              if (isArr && o.length == 2 && !eval(''+o[0]))
                 info.type = 'toggle';
             }
             else {
