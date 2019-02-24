@@ -354,10 +354,9 @@ window.configuratorApp = (function(){
      */
     initBoardsFromText: function(txt) {
       boards_list = {};
-      var r, findDef = new RegExp('[ \\t]*#define[ \\t]+(BOARD_[\\w_]+)[ \\t]+(\\d+)[ \\t]*(//[ \\t]*)?(.+)?', 'gm');
-      while((r = findDef.exec(txt)) !== null) {
-        boards_list[r[1]] = r[2].prePad(3, '  ') + " — " + r[4].replace(/\).*/, ')');
-      }
+      var r, findDef = new RegExp('[ \\t]*#define[ \\t]+(BOARD_[\\w_]+)[ \\t]+(\\d+)[ \\t]*(//[ \\t]*(.*))?', 'gm');
+      while((r = findDef.exec(txt)) !== null)
+        boards_list[r[1]] = r[2].prePad(3, '  ') + (r[4] !== undefined ? " — " + r[4].replace(/\).*/, ')') : '');
       this.log("Loaded boards:\n" + Object.keys(boards_list).join('\n'), LOG_ECHO);
       has_boards = true;
     },
