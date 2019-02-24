@@ -425,6 +425,20 @@ window.configuratorApp = (function(){
     },
 
     /**
+     * Return a list of all unique define names
+     */
+    getUniqueDefineList: function() {
+      var combined_list = {};
+      $.each(define_list, function(i,list) {
+        $.each(list, function(i,def) {
+          if (combined_list[def] === undefined) combined_list[def] = { name:def, parent:'' };
+        });
+      });
+      this.log(combined_list, LOG_WARNING);
+      return combined_list;
+    },
+
+    /**
      * Find the defines in one of the configs that are just variants.
      * Group them together for form-building and other uses.
      *
@@ -527,11 +541,14 @@ window.configuratorApp = (function(){
      * Get all conditional blocks and their line ranges
      * and store them in the dependent_groups list.
      *
+     * This data is gathered before configuration info
+     * so that define_info can reference this data.
+     *
      * dependent_groups[condition][i]
      *
-     *   .cindex config file index
-     *   .start  starting line
-     *   .end    ending line
+     *   .cindex  config file index
+     *   .start   starting line
+     *   .end     ending line
      *
      */
     initDependentGroups: function() {
@@ -1072,8 +1089,32 @@ window.configuratorApp = (function(){
       }
     },
 
+    /**
+     * CONFIGURATION CONDITION
+     * The given axis has the given driver type
+     */
+    axisIsDriver: function(axis, driver_type) {
+      var def = axis + '_DRIVER_TYPE',
+          type = self.defineExists(def) && self.defineIsEnabled(def) ? self.defineValue(def) : 'A4988';
+      return driver_type == type;
+    },
+
+    tmcDrivers: [ '2130', '2160', '2208', '2660', '5130', '5160' ],
+    stepperAxes: [ 'X', 'X2', 'Y', 'Y2', 'Z', 'Z2', 'Z3', 'E0', 'E1', 'E2', 'E3', 'E4', 'E5' ],
+
+    axisIsTMC: function(axis) {
+      for (var d in self.tmcDrivers) if (self.axisIsDriver(axis, 'TMC' + d)) return true;
+      return false;
+    },
+
     hasDriver: function(driver_type) {
-      return true;
+      for (var a in self.stepperAxes) if (self.axisIsDriver(a, driver_type)) return true;
+      return false;
+    },
+
+    hasTrinamic: function() {
+      for (var d in self.tmcDrivers) if (self.hasDriver('TMC' + d)) return true;
+      return false;
     },
 
     /**
@@ -1090,6 +1131,10 @@ window.configuratorApp = (function(){
       this.log('<< defineValue:'+name, LOG_FUNC);
 
       return (inf.type == 'switch') ? (val === undefined || val.trim() != '//') : val;
+    },
+
+    defineExists: function(name) {
+      return define_info[name] !== undefined;
     },
 
     /**
