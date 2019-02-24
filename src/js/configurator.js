@@ -575,6 +575,9 @@ window.configuratorApp = (function(){
                 .replace(/ENABLED[ \t]*\(/g, 'defined(')
                 .replace(/DISABLED[ \t]*\(/g, '!defined(')
                 .replace(/defined[ \t]*\(?[ \t]*([A-Z][A-Z0-9_]+)[ \t]*\)?/g, '!self.defineIsEnabled("$1")')
+                .replace(/AXIS_IS_TMC[ \t]*\([ \t]*([A-Z0-9]+)[ \t]*\)/g, 'self.axisIsTMC("$1")')
+                .replace(/HAS_TRINAMIC([ \t]*\([ \t]*\)[ \t]*)?/g, 'self.hasTrinamic()')
+                .replace(/AXIS_DRIVER_TYPE_([A-Z0-9]+)[ \t]*\([ \t]*([A-Z][A-Z0-9_]+)[ \t]*\)/g, 'self.axisIsDriver("$1","$2")')
                 .replace(/HAS_DRIVER[ \t]*\([ \t]*([A-Z][A-Z0-9_]+)[ \t]*\)/g, 'self.hasDriver("$1")')
                 .replace(/([A-Z][A-Z0-9_]{4,})/g, 'self.defineValue("$1")')
                 .replace(/\("self\.defineValue\(("[A-Z][A-Z0-9_]+")\)"\)/g, '($1)');
