@@ -12,7 +12,7 @@
  *    - Utilities to replace values in configuration files
  */
 
-$(function(){
+$(function() {
 
 "use strict";
 
@@ -52,14 +52,14 @@ var config_github_mf = {
 var config_remote = {
   type:  'remote',
   host:  'http://www.thinkyhead.com',
-  path:  '_marlin/config/2.0.x'
+  path:  '_marlin/config/1.1.x'
 };
 /**/
 
 //* Local
 var config_local = {
   type:  'local',
-  path:  'config/2.0.x'
+  path:  'config/1.1.x'
 };
 /**/
 
@@ -121,6 +121,7 @@ Date.prototype.fileStamp = function(filename) {
 
   return fs;
 }
+Number.prototype.within = function(a,b) { var b = this >= a && this <= b; }
 
 function isArray(v) { return Object.prototype.toString.call(v) == "[object Array]" }
 
@@ -181,17 +182,18 @@ window.configuratorApp = (function(){
 
   var LOG_NONE = 0,
       LOG_ECHO = 1,
-      LOG_WARNING = 2,
+      LOG_WARN = 2,
       LOG_ERROR = 4,
       LOG_FUNC = 8,
       LOG_PARSE = 16,
       LOG_MORE = 32,
-      LOG_OPTIONS = 64;
+      LOG_OPTIONS = 64,
+      LOG_TIPS = 128;
 
   // Return this anonymous object as configuratorApp
   return {
     // public data members
-    logging: LOG_WARNING|LOG_ERROR,
+    logging: LOG_NONE, //LOG_WARN|LOG_ERROR,
 
     // public methods
 
@@ -433,7 +435,12 @@ window.configuratorApp = (function(){
           if (combined_list[def] === undefined) combined_list[def] = { name:def, parent:'' };
         });
       });
-      this.log(combined_list, LOG_WARNING);
+      return combined_list;
+    },
+
+    getTopLevelDefineList: function() {
+      var combined_list = self.getUniqueDefineList();
+      
       return combined_list;
     },
 
@@ -566,27 +573,27 @@ window.configuratorApp = (function(){
             case 'elif':
               // Convert preprocessor expressions into Javascript code
               // HAS_DRIVER(DRIVER) ......  self.hasDriver("DRIVER")
-              // ENABLED(OPTION_NAME) ....  self.defineIsEnabled("OPTION_NAME")
-              // DISABLED(OPTION_NAME) ... !self.defineIsEnabled("OPTION_NAME")
-              // defined(OPTION_NAME) ....  self.defineIsEnabled("OPTION_NAME")
-              // !defined(OPTION_NAME) ... !self.defineIsEnabled("OPTION_NAME")
-              // OPTION_NAME .............  self.defineValue("OPTION_NAME")
+              // ENABLED(OPTION_NAME) ....  self.optionIsEnabled("OPTION_NAME")
+              // DISABLED(OPTION_NAME) ... !self.optionIsEnabled("OPTION_NAME")
+              // defined(OPTION_NAME) ....  self.optionIsEnabled("OPTION_NAME")
+              // !defined(OPTION_NAME) ... !self.optionIsEnabled("OPTION_NAME")
+              // OPTION_NAME .............  self.optionValue("OPTION_NAME")
               var code = code
                 .replace(/ENABLED[ \t]*\(/g, 'defined(')
                 .replace(/DISABLED[ \t]*\(/g, '!defined(')
-                .replace(/defined[ \t]*\(?[ \t]*([A-Z][A-Z0-9_]+)[ \t]*\)?/g, '!self.defineIsEnabled("$1")')
+                .replace(/defined[ \t]*\(?[ \t]*([A-Z][A-Z0-9_]+)[ \t]*\)?/g, '!self.optionIsEnabled("$1")')
                 .replace(/AXIS_IS_TMC[ \t]*\([ \t]*([A-Z0-9]+)[ \t]*\)/g, 'self.axisIsTMC("$1")')
                 .replace(/HAS_TRINAMIC([ \t]*\([ \t]*\)[ \t]*)?/g, 'self.hasTrinamic()')
                 .replace(/AXIS_DRIVER_TYPE_([A-Z0-9]+)[ \t]*\([ \t]*([A-Z][A-Z0-9_]+)[ \t]*\)/g, 'self.axisIsDriver("$1","$2")')
                 .replace(/HAS_DRIVER[ \t]*\([ \t]*([A-Z][A-Z0-9_]+)[ \t]*\)/g, 'self.hasDriver("$1")')
-                .replace(/([A-Z][A-Z0-9_]{4,})/g, 'self.defineValue("$1")')
-                .replace(/\("self\.defineValue\(("[A-Z][A-Z0-9_]+")\)"\)/g, '($1)');
+                .replace(/([A-Z][A-Z0-9_]{4,})/g, 'self.optionValue("$1")')
+                .replace(/"self\.optionValue\(("[A-Z][A-Z0-9_]+")\)"/g, '$1');
               ifStack.push(['('+code+')', lineNum]);  // #if starts on next line
               self.log("push     if " + code, LOG_PARSE);
               break;
             case 'ifdef':
               if ($.inArray(code, leave_out_defines) < 0) {
-                ifStack.push(['self.defineIsEnabled("' + code + '")', lineNum]);
+                ifStack.push(['self.optionIsEnabled("' + code + '")', lineNum]);
                 self.log("push  ifdef " + code, LOG_PARSE);
               }
               else {
@@ -595,7 +602,7 @@ window.configuratorApp = (function(){
               break;
             case 'ifndef':
               if ($.inArray(code, leave_out_defines) < 0) {
-                ifStack.push(['!self.defineIsEnabled("' + code + '")', lineNum]);
+                ifStack.push(['!self.optionIsEnabled("' + code + '")', lineNum]);
                 self.log("push ifndef " + code, LOG_PARSE);
               }
               else {
@@ -609,7 +616,7 @@ window.configuratorApp = (function(){
                 var cond = c[0], line = c[1];
                 self.log("pop " + c[0], LOG_PARSE);
                 if (dependent_groups[cond] === undefined) dependent_groups[cond] = [];
-                dependent_groups[cond].push({cindex:i,start:line,end:lineNum});
+                dependent_groups[cond].push({cindex:i,start:line+1,end:lineNum-1});
                 if (r[1] == 'else') {
                   // Reverse the condition
                   cond = (cond.indexOf('!') === 0) ? cond.substr(1) : ('!'+cond);
@@ -627,8 +634,12 @@ window.configuratorApp = (function(){
       this.log('<< initDependentGroups', LOG_FUNC);
     },
 
+    getDependencyMap: function() {
+
+    },
+
     /**
-     * Init all the defineInfo structures after reload
+     * Init all the optionInfo structures after reload
      * The "enabled" field may need an update for newly-loaded dependencies
      */
     initDefineInfo: function() {
@@ -979,7 +990,7 @@ window.configuratorApp = (function(){
           if (inf && inf.enabled != 'true') {
             self.log("eval (2): " + inf.enabled, LOG_MORE);
             var $elm = $('#'+name), ena = eval(inf.enabled);
-            var isEnabled = (inf.type == 'switch') || self.defineIsEnabled(name);
+            var isEnabled = (inf.type == 'switch') || self.optionIsEnabled(name);
             $('#'+name+'-switch').attr('disabled', !ena);
             $elm.attr('disabled', !(ena && isEnabled)).unblock(ena);
             $('label[for="'+name+'"]').unblock(ena);
@@ -995,7 +1006,7 @@ window.configuratorApp = (function(){
     initField: function(name) {
       this.log('>> initField:'+name, LOG_FUNC);
       var $elm = $('#'+name), inf = define_info[name];
-      $elm[0].defineInfo = inf;
+      $elm[0].optionInfo = inf;
 
       // Create a tooltip on the label if there is one
       if (inf.tooltip) {
@@ -1050,7 +1061,7 @@ window.configuratorApp = (function(){
         // $elm = the last element added
         $elm.after(
           $('<input>',{type:'checkbox',value:'1',class:'enabler added'})
-            .prop('checked',self.defineIsEnabled(name))
+            .prop('checked',self.optionIsEnabled(name))
             .attr({id: name+'-switch'})
             .change(self.handleSwitch)
         );
@@ -1097,7 +1108,7 @@ window.configuratorApp = (function(){
      */
     axisIsDriver: function(axis, driver_type) {
       var def = axis + '_DRIVER_TYPE',
-          type = self.defineExists(def) && self.defineIsEnabled(def) ? self.defineValue(def) : 'A4988';
+          type = self.optionExists(def) && self.optionIsEnabled(def) ? self.optionValue(def) : 'A4988';
       return driver_type == type;
     },
 
@@ -1122,28 +1133,28 @@ window.configuratorApp = (function(){
     /**
      * Get the current value of a #define
      */
-    defineValue: function(name) {
-      this.log('>> defineValue:'+name, LOG_FUNC);
+    optionValue: function(name) {
+      this.log('>> optionValue:'+name, LOG_FUNC);
       var inf = define_info[name];
       if (inf == null) return 'n/a';
       var r = inf.regex.exec(inf.line), val = r[inf.val_i];
 
       this.log(r, LOG_PARSE);
 
-      this.log('<< defineValue:'+name, LOG_FUNC);
+      this.log('<< optionValue:'+name, LOG_FUNC);
 
       return (inf.type == 'switch') ? (val === undefined || val.trim() != '//') : val;
     },
 
-    defineExists: function(name) {
+    optionExists: function(name) {
       return define_info[name] !== undefined;
     },
 
     /**
      * Get the current enabled state of a #define
      */
-    defineIsEnabled: function(name) {
-      this.log('>> defineIsEnabled:'+name, LOG_FUNC);
+    optionIsEnabled: function(name) {
+      this.log('>> optionIsEnabled:'+name, LOG_FUNC);
       var inf = define_info[name];
       if (inf == null) return false;
       var r = inf.regex.exec(inf.line);
@@ -1153,7 +1164,7 @@ window.configuratorApp = (function(){
       var on = r[1] != null ? r[1].trim() != '//' : true;
       this.log(name + ' = ' + on, LOG_PARSE);
 
-      this.log('<< defineIsEnabled:'+name, LOG_FUNC);
+      this.log('<< optionIsEnabled:'+name, LOG_FUNC);
 
       return on;
     },
@@ -1262,7 +1273,7 @@ window.configuratorApp = (function(){
      */
     initFieldValue: function(name) {
       var $elm = $('#'+name), inf = define_info[name],
-          val = this.defineValue(name);
+          val = this.optionValue(name);
 
       this.log('>> initFieldValue:' + name + ' to ' + val, LOG_FUNC);
 
@@ -1270,7 +1281,7 @@ window.configuratorApp = (function(){
       this.log("eval (3): " + inf.enabled, LOG_MORE);
       var $cb = $('#'+name+'-switch'), avail = eval(inf.enabled), on = true;
       if ($cb.length) {
-        on = self.defineIsEnabled(name);
+        on = self.optionIsEnabled(name);
         $cb.prop('checked', on);
       }
 
@@ -1316,7 +1327,7 @@ window.configuratorApp = (function(){
      *    .type    type of define: switch, list, quoted, plain, or toggle
      *    .size    the number of items in a "list" type
      *    .options select options, if any
-     *    .cindex  config index
+     *    .cindex  config index (the file in which it is defined)
      *    .field   pre containing the config text (config_list[cindex][0])
      *    .line    the full line from the config text
      *    .pre     any text preceding #define
@@ -1403,63 +1414,90 @@ window.configuratorApp = (function(){
         if (info.line.search(find) >= 0)
           eoltip = tooltip = info.line.replace(find, '$1');
 
-        // Get all the comments immediately before the item, also include #define lines preceding it
+        // Get all // preceding comments and #defines
+        var regex_defines = '([ \\t]*(//[ \\t]*)?#define[^\n]+[\n]+)*',
+            regex_tooltip = [
+              {
+                // capture eol comment text, including blank lines for spacing (if wanted)
+                //      1                   1
+                outer: '([ \\t]*//+[^\n]+\n+)+',
+                inner: '^[ \\t]*//+[ \\t]*(.*)[ \\t]*$',
+                outer_capture: 1,
+                inner_capture: 1
+              }, {
+                // capture block comment text too
+                //      1                           1
+                outer: '([ \\t]*\\*+[^\n]*[ \\t]*\n+)+[ \\t]*\\*+/[ \\t]*\n+',
+                inner: '^[ \\t]*\\*+[ \\t]*(.*)[ \\t]*$',
+                outer_capture: 1,
+                inner_capture: 1
+              }
+            ];
+
         var s;
-        // find = new RegExp('(([ \\t]*(//|#)[^\n]+\n+){1,4})' + info.line.regEsc(), 'g');
-        find = new RegExp('(([ \\t]*//+[^\n]+\n+)+([ \\t]*(//)?#define[^\n]+\n+)*)' + info.line.regEsc(), 'g');
-        if (r = find.exec(txt)) {
-          var temp = [], tips = [];
+        for (var k in [0]) {
+          var srch = regex_tooltip[k];
+          var find = new RegExp(srch.outer + regex_defines + info.line.regEsc(), 'g');
+          if (r = find.exec(txt)) {
+            var temp = [], tips = [];
 
-          // Find each line in forward order, store in reverse
-          find = new RegExp('^[ \\t]*//+[ \\t]*(.*)[ \\t]*$', 'gm');
-          while((s = find.exec(r[1])) !== null) temp.unshift(s[1]);
+            //console.log('outer ::: ', r);
 
-          this.log(name+":\n"+temp.join('\n'), LOG_PARSE);
-
-          // Go through the reversed lines and add comment lines on
-          $.each(temp, function(i,v) {
-            // @ annotation breaks the comment chain
-            if (v.match(/^[ \\t]*\/\/+[ \\t]*@/)) return false;
-            // A #define breaks the chain, after a good tip
-            if (v.match(/^[ \\t]*(\/\/+)?[ \\t]*#define/)) return (tips.length < 1);
-            // Skip unwanted lines
-            if (v.match(/^[ \\t]*(={5,}|#define[ \\t]+.*)/g)) return true;
-            tips.unshift(v);
-          });
-
-          // Build the final tooltip, extract embedded options
-          $.each(tips, function(i,tip) {
-            // if (tip.match(/^#define[ \\t]/) != null) tooltip = eoltip;
-            // JSON data? Save as select options
-            var parts = tip.match(/:([\[{].+)/);
-            if (parts != null && info.options === undefined) {
-              // TODO
-              // :[1-6] = value limits
-              self.log(name + '[]=' + parts[1], LOG_OPTIONS);
-              var o = eval('o=' + parts[1]), isArr = isArray(o);
-              info.options = o;
-              if (isArr && o.length == 2 && !eval(''+o[0]))
-                info.type = 'toggle';
+            // Find each line in forward order, store in reverse
+            find = new RegExp(srch.inner, 'gm');
+            while ((s = find.exec(r[srch.outer_capture])) !== null) {
+              //console.log('inner ::: ', s);
+              temp.unshift(s[srch.inner_capture]);
             }
-            else {
-              // Other lines added to the tooltip
-              tooltip += ' ' + tip + '\n';
-            }
-          });
 
-        } // found comments
+            self.log(name+":\n"+temp.join('\n'), LOG_TIPS);
+
+            // Go through the reversed lines and add comment lines on
+            $.each(temp, function(i,v) {
+              // @ annotation breaks the comment chain
+              if (v.match(/^[ \\t]*\/\/+[ \\t]*@/)) return false;
+              // A #define breaks the chain, after a good tip
+              if (v.match(/^[ \\t]*(\/\/+)?[ \\t]*#define/)) return (tips.length < 1);
+              // Skip unwanted lines
+              if (v.match(/^[ \\t]*(={5,}|#define[ \\t]+.*)/g)) return true;
+              tips.unshift(v);
+            });
+
+            // Build the final tooltip, extract embedded options
+            $.each(tips, function(i,tip) {
+              // if (tip.match(/^#define[ \\t]/) != null) tooltip = eoltip;
+              // JSON data? Save as select options
+              var parts = tip.match(/:([\[{].+)/);
+              if (parts != null && info.options === undefined) {
+                // TODO
+                // :[1-6] = value limits
+                self.log(name + '[]=' + parts[1], LOG_OPTIONS);
+                var o = eval('o=' + parts[1]), isArr = isArray(o);
+                info.options = o;
+                if (isArr && o.length == 2 && !eval(''+o[0]))
+                  info.type = 'toggle';
+              }
+              else {
+                // Other lines added to the tooltip
+                tooltip += ' ' + tip + '\n';
+              }
+            });
+
+          } // found comments
+
+        } // loop
 
         // Add .tooltip and .lineNum properties to the info
         find = new RegExp('^'+name); // Strip the name from the tooltip
         var lineNum = this.getLineNumberOfText(info.line, txt);
 
-        // See if this define is enabled conditionally
+        // See if this define is conditionally editable
         var enable_cond = '';
-        $.each(dependent_groups, function(cond,dat){
-          $.each(dat, function(i,o){
-            if (o.cindex == cindex && lineNum > o.start && lineNum < o.end) {
-              if (enable_cond != '') enable_cond += ' && ';
-              enable_cond += '(' + cond + ')';
+        $.each(dependent_groups, function(cond,dat) {                    // Group: condition, data
+          $.each(dat, function(i,o) {                                    // Data: config file index, line range, parent option
+            if (o.cindex == cindex && lineNum.within(o.start, o.end)) {  // Is this define within the range of the condition?
+              if (enable_cond !== '') enable_cond += ' && ';
+              enable_cond += '(' + cond + ')';                           // Add to this define's edit condition
             }
           });
         });
@@ -1468,7 +1506,7 @@ window.configuratorApp = (function(){
           tooltip: '<strong>'+name+'</strong> '+tooltip.trim().replace(find,'').toHTML(),
           lineNum: lineNum,
           switchable: (info.type != 'switch' && info.line.match(/^[ \t]*\/\//)) || false, // Disabled? Mark as "switchable"
-          enabled: enable_cond.length ? enable_cond : 'true'
+          enabled: enable_cond == '' ? 'true' : enable_cond
         });
 
       } // if info.type
@@ -1560,12 +1598,13 @@ window.configuratorApp = (function(){
         var line = this.getErrorObject().stack.split("\n")[3].replace(/.+\.js:(\d+):.+/, '$1'),
             type = "ECHO";
         switch (l) {
-          case LOG_ECHO:    type = 'ECHO';    break;
-          case LOG_WARNING: type = 'WARNING'; break;
-          case LOG_ERROR:   type = 'ERROR';   break;
-          case LOG_FUNC:    type = 'FUNC';    break;
-          case LOG_PARSE:   type = 'PARSE';   break;
-          case LOG_MORE:    type = 'MORE';    break;
+          case LOG_ECHO:  type = 'ECHO';  break;
+          case LOG_WARN:  type = 'WARN';  break;
+          case LOG_ERROR: type = 'ERROR'; break;
+          case LOG_FUNC:  type = 'FUNC';  break;
+          case LOG_PARSE: type = 'PARSE'; break;
+          case LOG_TIPS:  type = 'TIPS';  break;
+          case LOG_MORE:  type = 'MORE';  break;
         }
         var fun = (l == LOG_FUNC);
         if (fun && o.match(/^<</)) self.log_prefix = self.log_prefix.substring(2);
