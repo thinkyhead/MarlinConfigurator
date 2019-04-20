@@ -63,7 +63,7 @@ var config_local = {
 };
 /**/
 
-var config = window.location.protocol == 'file:' ? config_remote : config_local;
+var config = window.location.protocol == 'file:' ? config_github_mf : config_local;
 
 function github_command(conf, command, path) {
   var req = conf.host+'/repos/'+conf.owner+'/'+conf.repo+'/'+command;
